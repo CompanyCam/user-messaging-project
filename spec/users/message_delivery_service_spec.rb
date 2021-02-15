@@ -20,7 +20,7 @@ RSpec.describe Users::MessageDeliveryService do
       expect(service.message).to eq(message)
     end
 
-    it 'initializes an failures list' do
+    it 'initializes a failures list' do
       service = described_class.new(user, message)
       expect(service.failures).to eq([])
     end
@@ -48,15 +48,32 @@ RSpec.describe Users::MessageDeliveryService do
         User.new(
           first_name: 'Test',
           last_name: 'User',
-          phone_number: '+14025551212',
+          phone_number: phone_number,
           delivery_methods: 'sms'
         )
       end
+      let(:phone_number) { '+14025551212' }
 
-      it 'does not call a service' do
-        expect_any_instance_of(SmsService).to receive(:deliver)
-        expect_any_instance_of(EmailService).to_not receive(:deliver)
-        described_class.new(user, message).deliver_message
+      context 'when the number is valid' do
+        it 'calls the SmsService' do
+          expect_any_instance_of(SmsService).to receive(:deliver)
+          described_class.new(user, message).deliver_message
+        end
+
+        it 'does not call the EmailService' do
+          expect_any_instance_of(EmailService).to_not receive(:deliver)
+          described_class.new(user, message).deliver_message
+        end
+      end
+
+      context 'when the number is invalid' do
+        let(:phone_number) { 'bad' }
+
+        it 'adds the service to the list of failures' do
+          service = described_class.new(user, message)
+          service.deliver_message
+          expect(service.failures).to include('sms')
+        end
       end
     end
 
@@ -65,15 +82,32 @@ RSpec.describe Users::MessageDeliveryService do
         User.new(
           first_name: 'Test',
           last_name: 'User',
-          email: 'test.user@companycam.com',
+          email: email,
           delivery_methods: 'email'
         )
       end
+      let(:email) { 'test.user@companycam.com' }
 
-      it 'does not call a service' do
-        expect_any_instance_of(SmsService).to_not receive(:deliver)
-        expect_any_instance_of(EmailService).to receive(:deliver)
-        described_class.new(user, message).deliver_message
+      context 'when the email is valid' do
+        it 'calls the EmailService' do
+          expect_any_instance_of(EmailService).to receive(:deliver)
+          described_class.new(user, message).deliver_message
+        end
+
+        it 'does not call the SmsService' do
+          expect_any_instance_of(SmsService).to_not receive(:deliver)
+          described_class.new(user, message).deliver_message
+        end
+      end
+
+      context 'when the email is invalid' do
+        let(:email) { 'bad' }
+
+        it 'adds the service to the list of failures' do
+          service = described_class.new(user, message)
+          service.deliver_message
+          expect(service.failures).to include('email')
+        end
       end
     end
 
@@ -82,16 +116,32 @@ RSpec.describe Users::MessageDeliveryService do
         User.new(
           first_name: 'Test',
           last_name: 'User',
-          email: 'test.user@companycam.com',
-          phone_number: '+14025551212',
+          email: email,
+          phone_number: phone_number,
           delivery_methods: ['email', 'sms']
         )
       end
+      let(:email) { 'test.user@companycam.com' }
+      let(:phone_number) { '+14025551212' }
 
-      it 'does not call a service' do
-        expect_any_instance_of(SmsService).to receive(:deliver)
-        expect_any_instance_of(EmailService).to receive(:deliver)
-        described_class.new(user, message).deliver_message
+      context 'with valid info' do
+        it 'calls both services' do
+          expect_any_instance_of(SmsService).to receive(:deliver)
+          expect_any_instance_of(EmailService).to receive(:deliver)
+          described_class.new(user, message).deliver_message
+        end
+      end
+
+      context 'with invalid info' do
+        let(:email) { 'bad' }
+        let(:phone_number) { 'bad' }
+
+        it 'adds both delivery methods to the list of failures' do
+          service = described_class.new(user, message)
+          service.deliver_message
+          expect(service.failures).to include('sms')
+          expect(service.failures).to include('email')
+        end
       end
     end
 
